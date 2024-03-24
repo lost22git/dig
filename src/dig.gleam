@@ -231,7 +231,6 @@ pub fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
         }
         None -> Ok(List(key, None))
       }
-      // None -> Error(InvalidPathSeg(path_seg))
     }
   }
 }
