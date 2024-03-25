@@ -22,11 +22,11 @@ pub fn dig(path: List(String)) -> DigResult {
   list.try_fold(path, None, fn(acc, it) {
     case acc {
       None -> {
-        use it_dig_decoder <- try(dig_path_seg_with_trace([], it))
+        use it_dig_decoder <- try(dig_path_seg_with_path([], it))
         Ok(Some(it_dig_decoder))
       }
       Some(DigObject(acc_path, acc_decoder)) -> {
-        use it_dig_decoder <- try(dig_path_seg_with_trace(acc_path, it))
+        use it_dig_decoder <- try(dig_path_seg_with_path(acc_path, it))
 
         let dig_decoder = case it_dig_decoder {
           DigObject(it_path, it_decoder) ->
@@ -46,7 +46,7 @@ pub fn dig(path: List(String)) -> DigResult {
         Ok(Some(dig_decoder))
       }
       Some(DigList(acc_path, acc_decoder)) -> {
-        use it_dig_decoder <- try(dig_path_seg_with_trace(acc_path, it))
+        use it_dig_decoder <- try(dig_path_seg_with_path(acc_path, it))
 
         let dig_decoder = case it_dig_decoder {
           DigObject(it_path, it_decoder) ->
@@ -85,11 +85,11 @@ pub fn dig(path: List(String)) -> DigResult {
 }
 
 pub fn dig_path_seg(path_seg: String) -> Result(DigDecoder, DigError) {
-  dig_path_seg_with_trace([], path_seg)
+  dig_path_seg_with_path([], path_seg)
 }
 
-pub fn dig_path_seg_with_trace(
-  path_segs_traced: List(String),
+pub fn dig_path_seg_with_path(
+  path: List(String),
   path_seg: String,
 ) -> Result(DigDecoder, DigError) {
   use parsed_path_seg <- try(
@@ -97,27 +97,23 @@ pub fn dig_path_seg_with_trace(
     |> result.map_error(fn(e) { ParsePath(e) }),
   )
 
-  let path_segs_traced = list.append(path_segs_traced, [path_seg])
+  let path = list.append(path, [path_seg])
 
   let decorder = case parsed_path_seg {
-    Object(key) ->
-      DigObject(path_segs_traced, dynamic.field(key, dynamic.dynamic))
+    Object(key) -> DigObject(path, dynamic.field(key, dynamic.dynamic))
     List(key_option, index_option) -> {
       case key_option, index_option {
         Some(key), None -> {
-          DigList(
-            path_segs_traced,
-            dynamic.field(key, dynamic.list(dynamic.dynamic)),
-          )
+          DigList(path, dynamic.field(key, dynamic.list(dynamic.dynamic)))
         }
-        None, None -> DigList(path_segs_traced, dynamic.list(dynamic.dynamic))
+        None, None -> DigList(path, dynamic.list(dynamic.dynamic))
         Some(key), Some(index) ->
           DigObject(
-            path_segs_traced,
+            path,
             dynamic.field(key, fn(d) {
               use shadow_list <- try(
                 dynamic.shallow_list(d)
-                |> map_errors(fn(e) { DecodeError(..e, path: path_segs_traced) }),
+                |> map_errors(fn(e) { DecodeError(..e, path: path) }),
               )
 
               shadow_list
@@ -126,16 +122,16 @@ pub fn dig_path_seg_with_trace(
                 DecodeError(
                   expected: "index: " <> int.to_string(index),
                   found: "missing",
-                  path: path_segs_traced,
+                  path: path,
                 ),
               ])
             }),
           )
         None, Some(index) ->
-          DigObject(path_segs_traced, fn(d) {
+          DigObject(path, fn(d) {
             use shallow_list <- try(
               dynamic.shallow_list(d)
-              |> map_errors(fn(e) { DecodeError(..e, path: path_segs_traced) }),
+              |> map_errors(fn(e) { DecodeError(..e, path: path) }),
             )
 
             shallow_list
@@ -144,7 +140,7 @@ pub fn dig_path_seg_with_trace(
               DecodeError(
                 expected: "index: " <> int.to_string(index),
                 found: "missing",
-                path: path_segs_traced,
+                path: path,
               ),
             ])
           })
@@ -154,11 +150,10 @@ pub fn dig_path_seg_with_trace(
       case key_option {
         Some(key) ->
           DigObject(
-            path_segs_traced,
+            path,
             dynamic.field(key, dynamic.element(index, dynamic.dynamic)),
           )
-        None ->
-          DigObject(path_segs_traced, dynamic.element(index, dynamic.dynamic))
+        None -> DigObject(path, dynamic.element(index, dynamic.dynamic))
       }
     }
   }
