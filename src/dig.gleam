@@ -25,71 +25,60 @@ pub fn dig(path: List(String)) -> DigResult {
         use it_dig_decoder <- try(dig_path_seg_with_trace([], it))
         Ok(Some(it_dig_decoder))
       }
-      Some(acc_dig_decoder) -> {
-        case acc_dig_decoder {
-          DigObject(acc_path, acc_decoder) -> {
-            let it_path = list.append(acc_path, [it])
-            use it_dig_decoder <- try(dig_path_seg_with_trace(
-              acc_dig_decoder.path,
-              it,
-            ))
+      Some(DigObject(acc_path, acc_decoder)) -> {
+        use it_dig_decoder <- try(dig_path_seg_with_trace(acc_path, it))
 
-            let dig_decoder = case it_dig_decoder {
-              DigObject(_, it_decoder) ->
-                DigObject(it_path, fn(d) {
-                  use dd <- try(acc_decoder(d))
-                  it_decoder(dd)
-                  |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
-                })
-              DigList(_, it_decoder) ->
-                DigList(it_path, fn(d) {
-                  use dd <- try(acc_decoder(d))
-                  it_decoder(dd)
-                  |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
-                })
-            }
-
-            Ok(Some(dig_decoder))
-          }
-          DigList(acc_path, acc_decoder) -> {
-            let it_path = list.append(acc_path, [it])
-            use it_dig_decoder <- try(dig_path_seg_with_trace(
-              acc_dig_decoder.path,
-              it,
-            ))
-
-            let dig_decoder = case it_dig_decoder {
-              DigObject(_, it_decoder) ->
-                DigList(it_path, fn(d) {
-                  use dd <- try(acc_decoder(d))
-                  iterator.from_list(dd)
-                  |> iterator.map(it_decoder)
-                  |> iterator.map(map_errors(_, fn(e) {
-                    DecodeError(..e, path: it_path)
-                  }))
-                  |> iterator.to_list()
-                  |> result.all()
-                })
-              DigList(_, it_decoder) ->
-                DigList(it_path, fn(d) {
-                  use dd <- try(acc_decoder(d))
-                  list.flat_map(dd, fn(a) {
-                    // Result(List(D), E) -> List(Result(D,E))
-                    case it_decoder(a) {
-                      Ok(aa) -> list.map(aa, Ok)
-                      Error(e) -> [
-                        Error(e)
-                        |> map_errors(fn(e) { DecodeError(..e, path: it_path) }),
-                      ]
-                    }
-                  })
-                  |> result.all()
-                })
-            }
-
-            Ok(Some(dig_decoder))
-          }
+        let dig_decoder = case it_dig_decoder {
+          DigObject(it_path, it_decoder) ->
+            DigObject(it_path, fn(d) {
+              use dd <- try(acc_decoder(d))
+              it_decoder(dd)
+              |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
+            })
+          DigList(it_path, it_decoder) ->
+            DigList(it_path, fn(d) {
+              use dd <- try(acc_decoder(d))
+              it_decoder(dd)
+              |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
+            })
         }
+
+        Ok(Some(dig_decoder))
+      }
+      Some(DigList(acc_path, acc_decoder)) -> {
+        use it_dig_decoder <- try(dig_path_seg_with_trace(acc_path, it))
+
+        let dig_decoder = case it_dig_decoder {
+          DigObject(it_path, it_decoder) ->
+            DigList(it_path, fn(d) {
+              use dd <- try(acc_decoder(d))
+              iterator.from_list(dd)
+              |> iterator.map(it_decoder)
+              |> iterator.map(map_errors(_, fn(e) {
+                DecodeError(..e, path: it_path)
+              }))
+              |> iterator.to_list()
+              |> result.all()
+            })
+          DigList(it_path, it_decoder) ->
+            DigList(it_path, fn(d) {
+              use dd <- try(acc_decoder(d))
+              list.flat_map(dd, fn(a) {
+                // Result(List(D), E) -> List(Result(D,E))
+                case it_decoder(a) {
+                  Ok(aa) -> list.map(aa, Ok)
+                  Error(e) -> [
+                    map_errors(Error(e), fn(e) {
+                      DecodeError(..e, path: it_path)
+                    }),
+                  ]
+                }
+              })
+              |> result.all()
+            })
+        }
+
+        Ok(Some(dig_decoder))
       }
     }
   })
@@ -108,9 +97,7 @@ pub fn dig_path_seg_with_trace(
     |> result.map_error(fn(e) { ParsePath(e) }),
   )
 
-  let path_segs_traced =
-    path_segs_traced
-    |> list.append([path_seg])
+  let path_segs_traced = list.append(path_segs_traced, [path_seg])
 
   let decorder = case parsed_path_seg {
     Object(key) ->
