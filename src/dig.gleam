@@ -103,51 +103,48 @@ pub fn dig_path_seg_with_path(
 
   let path = list.append(path, [path_seg])
 
-  let decorder = case parsed_path_seg {
+  case parsed_path_seg {
     Object(key) -> DigObject(path, dynamic.field(key, dynamic.dynamic))
-    List(key_option, index_option) -> {
-      case key_option, index_option {
-        Some(key), None -> {
-          DigList(path, dynamic.field(key, dynamic.list(dynamic.dynamic)))
-        }
-        None, None -> DigList(path, dynamic.list(dynamic.dynamic))
-        Some(key), Some(index) ->
-          DigObject(
-            path,
-            dynamic.field(key, fn(d) {
-              use shadow_list <- try(
-                dynamic.shallow_list(d)
-                |> map_errors(fn(e) { DecodeError(..e, path: path) }),
-              )
-              shadow_list
-              |> list.at(index)
-              |> replace_error([
-                DecodeError(
-                  expected: "index: " <> int.to_string(index),
-                  found: "missing",
-                  path: path,
-                ),
-              ])
-            }),
+    // List
+    List(Some(key), None) ->
+      DigList(path, dynamic.field(key, dynamic.list(dynamic.dynamic)))
+    List(None, None) -> DigList(path, dynamic.list(dynamic.dynamic))
+    List(Some(key), Some(index)) ->
+      DigObject(
+        path,
+        dynamic.field(key, fn(d) {
+          use shadow_list <- try(
+            dynamic.shallow_list(d)
+            |> map_errors(fn(e) { DecodeError(..e, path: path) }),
           )
-        None, Some(index) ->
-          DigObject(path, fn(d) {
-            use shallow_list <- try(
-              dynamic.shallow_list(d)
-              |> map_errors(fn(e) { DecodeError(..e, path: path) }),
-            )
-            shallow_list
-            |> list.at(index)
-            |> replace_error([
-              DecodeError(
-                expected: "index: " <> int.to_string(index),
-                found: "missing",
-                path: path,
-              ),
-            ])
-          })
-      }
-    }
+          shadow_list
+          |> list.at(index)
+          |> replace_error([
+            DecodeError(
+              expected: "index: " <> int.to_string(index),
+              found: "missing",
+              path: path,
+            ),
+          ])
+        }),
+      )
+    List(None, Some(index)) ->
+      DigObject(path, fn(d) {
+        use shallow_list <- try(
+          dynamic.shallow_list(d)
+          |> map_errors(fn(e) { DecodeError(..e, path: path) }),
+        )
+        shallow_list
+        |> list.at(index)
+        |> replace_error([
+          DecodeError(
+            expected: "index: " <> int.to_string(index),
+            found: "missing",
+            path: path,
+          ),
+        ])
+      })
+    // Tuple ? really need it?
     Tuple(key_option, index) -> {
       case key_option {
         None -> DigObject(path, dynamic.element(index, dynamic.dynamic))
@@ -159,10 +156,10 @@ pub fn dig_path_seg_with_path(
       }
     }
   }
-
-  Ok(decorder)
+  |> Ok()
 }
 
+/// Object
 pub type PathSeg {
   Object(key: String)
   List(key: Option(String), index: Option(Int))
