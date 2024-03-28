@@ -163,11 +163,11 @@ pub fn dig_test() {
   {
     let assert Ok(dig.DigList(path, decoder)) =
       dig.dig(
-        "foo[].bar[1].baz"
+        "foo[].bar[].baz"
         |> string.split("."),
       )
 
-    should.equal(path, ["foo[]", "bar[1]", "baz"])
+    should.equal(path, ["foo[]", "bar[]", "baz"])
 
     let assert Ok(d) =
       json_str
@@ -175,7 +175,7 @@ pub fn dig_test() {
 
     d
     |> list.map(dynamic.string)
-    |> should.equal([Ok("b"), Ok("d")])
+    |> should.equal([Ok("a"), Ok("b"), Ok("c"), Ok("d")])
   }
 
   {

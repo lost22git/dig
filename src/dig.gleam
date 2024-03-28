@@ -78,7 +78,8 @@ pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
     DigList(_a_path, a_decoder), DigList(b_path, b_decoder) ->
       DigList(b_path, fn(d) {
         use dd <- try(a_decoder(d))
-        list.flat_map(dd, fn(ddd) {
+        {
+          use ddd <- list.flat_map(dd)
           // Result(List(D), E) -> List(Result(D,E))
           case b_decoder(ddd) {
             Ok(v) -> list.map(v, Ok)
@@ -86,7 +87,7 @@ pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
               map_errors(Error(e), fn(e) { DecodeError(..e, path: b_path) }),
             ]
           }
-        })
+        }
         |> result.all()
       })
   }
