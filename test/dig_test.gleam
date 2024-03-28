@@ -38,6 +38,13 @@ pub fn parse_path_seg_test() {
     index
     |> should.equal(Some(1))
   }
+  {
+    let assert Ok(dig.List(None, index)) =
+      "[]"
+      |> dig.parse_path_seg()
+    index
+    |> should.equal(None)
+  }
   // Tuple
   {
     let assert Ok(dig.Tuple(Some(key), index)) =
@@ -136,7 +143,7 @@ pub fn dig_test() {
   "
 
   {
-    let assert Ok(Some(dig.DigObject(path, decoder))) =
+    let assert Ok(dig.DigObject(path, decoder)) =
       dig.dig(
         "foo[1].bar[1].baz"
         |> string.split("."),
@@ -154,7 +161,7 @@ pub fn dig_test() {
   }
 
   {
-    let assert Ok(Some(dig.DigList(path, decoder))) =
+    let assert Ok(dig.DigList(path, decoder)) =
       dig.dig(
         "foo[].bar[1].baz"
         |> string.split("."),
@@ -172,7 +179,7 @@ pub fn dig_test() {
   }
 
   {
-    let assert Ok(Some(dig.DigList(path, decoder))) =
+    let assert Ok(dig.DigList(path, decoder)) =
       dig.dig(
         "foo[].miss_me[1].baz"
         |> string.split("."),
@@ -194,7 +201,7 @@ pub fn dig_test() {
   }
 
   {
-    let assert Ok(Some(dig.DigObject(path, decoder))) =
+    let assert Ok(dig.DigObject(path, decoder)) =
       dig.dig(
         "haha.miss_me.baz"
         |> string.split("."),

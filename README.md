@@ -48,7 +48,7 @@ pub fn dig_test() {
   "
 
   {
-    let assert Ok(Some(dig.DigObject(path, decoder))) =
+    let assert Ok(dig.DigObject(path, decoder)) =
       dig.dig(
         "foo[1].bar[1].baz"
         |> string.split("."),
@@ -66,7 +66,7 @@ pub fn dig_test() {
   }
 
   {
-    let assert Ok(Some(dig.DigList(path, decoder))) =
+    let assert Ok(dig.DigList(path, decoder)) =
       dig.dig(
         "foo[].bar[1].baz"
         |> string.split("."),
@@ -84,7 +84,7 @@ pub fn dig_test() {
   }
 
   {
-    let assert Ok(Some(dig.DigList(path, decoder))) =
+    let assert Ok(dig.DigList(path, decoder)) =
       dig.dig(
         "foo[].miss_me[1].baz"
         |> string.split("."),

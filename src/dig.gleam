@@ -11,81 +11,85 @@ pub type DigDecoder {
   DigList(path: List(String), inner: Decoder(List(Dynamic)))
 }
 
+pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
+  case dig_decoder {
+    DigObject(path, _) -> path
+    DigList(path, _) -> path
+  }
+}
+
 pub type DigError {
+  EmptyPath
   ParsePath(inner: PathSegParseError)
 }
 
 pub type DigResult =
-  Result(Option(DigDecoder), DigError)
+  Result(DigDecoder, DigError)
 
 pub fn dig(path: List(String)) -> DigResult {
-  list.try_fold(path, None, fn(acc, it) {
-    case acc {
-      None -> {
-        use it_dig_decoder <- try(dig_path_seg_with_path([], it))
-        Ok(Some(it_dig_decoder))
-      }
-      Some(DigObject(acc_path, acc_decoder)) -> {
-        use it_dig_decoder <- try(dig_path_seg_with_path(acc_path, it))
-
-        let dig_decoder = case it_dig_decoder {
-          DigObject(it_path, it_decoder) ->
-            DigObject(it_path, fn(d) {
-              use dd <- try(acc_decoder(d))
-              it_decoder(dd)
-              |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
-            })
-          DigList(it_path, it_decoder) ->
-            DigList(it_path, fn(d) {
-              use dd <- try(acc_decoder(d))
-              it_decoder(dd)
-              |> map_errors(fn(e) { DecodeError(..e, path: it_path) })
-            })
-        }
-
-        Ok(Some(dig_decoder))
-      }
-      Some(DigList(acc_path, acc_decoder)) -> {
-        use it_dig_decoder <- try(dig_path_seg_with_path(acc_path, it))
-
-        let dig_decoder = case it_dig_decoder {
-          DigObject(it_path, it_decoder) ->
-            DigList(it_path, fn(d) {
-              use dd <- try(acc_decoder(d))
-              iterator.from_list(dd)
-              |> iterator.map(it_decoder)
-              |> iterator.map(map_errors(_, fn(e) {
-                DecodeError(..e, path: it_path)
-              }))
-              |> iterator.to_list()
-              |> result.all()
-            })
-          DigList(it_path, it_decoder) ->
-            DigList(it_path, fn(d) {
-              use dd <- try(acc_decoder(d))
-              list.flat_map(dd, fn(a) {
-                // Result(List(D), E) -> List(Result(D,E))
-                case it_decoder(a) {
-                  Ok(aa) -> list.map(aa, Ok)
-                  Error(e) -> [
-                    map_errors(Error(e), fn(e) {
-                      DecodeError(..e, path: it_path)
-                    }),
-                  ]
-                }
-              })
-              |> result.all()
-            })
-        }
-
-        Ok(Some(dig_decoder))
-      }
+  case path {
+    [] -> Error(EmptyPath)
+    [first, ..rest] -> {
+      use first_dig_decoder <- try(dig_path_seg_with_path([], first))
+      rest
+      |> list.try_fold(first_dig_decoder, fn(acc_dig_decoder, it) {
+        use it_dig_decoder <- try(dig_path_seg_with_path(
+          get_path(acc_dig_decoder),
+          it,
+        ))
+        acc_dig_decoder
+        |> compose(it_dig_decoder)
+        |> Ok()
+      })
     }
-  })
+  }
 }
 
-pub fn dig_path_seg(path_seg: String) -> Result(DigDecoder, DigError) {
+pub fn dig_path_seg(path_seg: String) -> DigResult {
   dig_path_seg_with_path([], path_seg)
+}
+
+pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
+  case a, b {
+    DigObject(_a_path, a_decoder), DigObject(b_path, b_decoder) ->
+      DigObject(b_path, fn(d) {
+        use dd <- try(a_decoder(d))
+        b_decoder(dd)
+        |> map_errors(fn(e) { DecodeError(..e, path: b_path) })
+      })
+
+    DigObject(_a_path, a_decoder), DigList(b_path, b_decoder) ->
+      DigList(b_path, fn(d) {
+        use dd <- try(a_decoder(d))
+        b_decoder(dd)
+        |> map_errors(fn(e) { DecodeError(..e, path: b_path) })
+      })
+
+    DigList(_a_path, a_decoder), DigObject(b_path, b_decoder) ->
+      DigList(b_path, fn(d) {
+        use dd <- try(a_decoder(d))
+        iterator.from_list(dd)
+        |> iterator.map(b_decoder)
+        |> iterator.map(map_errors(_, fn(e) { DecodeError(..e, path: b_path) }))
+        |> iterator.to_list()
+        |> result.all()
+      })
+
+    DigList(_a_path, a_decoder), DigList(b_path, b_decoder) ->
+      DigList(b_path, fn(d) {
+        use dd <- try(a_decoder(d))
+        list.flat_map(dd, fn(ddd) {
+          // Result(List(D), E) -> List(Result(D,E))
+          case b_decoder(ddd) {
+            Ok(v) -> list.map(v, Ok)
+            Error(e) -> [
+              map_errors(Error(e), fn(e) { DecodeError(..e, path: b_path) }),
+            ]
+          }
+        })
+        |> result.all()
+      })
+  }
 }
 
 pub fn dig_path_seg_with_path(
@@ -115,7 +119,6 @@ pub fn dig_path_seg_with_path(
                 dynamic.shallow_list(d)
                 |> map_errors(fn(e) { DecodeError(..e, path: path) }),
               )
-
               shadow_list
               |> list.at(index)
               |> replace_error([
@@ -133,7 +136,6 @@ pub fn dig_path_seg_with_path(
               dynamic.shallow_list(d)
               |> map_errors(fn(e) { DecodeError(..e, path: path) }),
             )
-
             shallow_list
             |> list.at(index)
             |> replace_error([
@@ -148,12 +150,12 @@ pub fn dig_path_seg_with_path(
     }
     Tuple(key_option, index) -> {
       case key_option {
+        None -> DigObject(path, dynamic.element(index, dynamic.dynamic))
         Some(key) ->
           DigObject(
             path,
             dynamic.field(key, dynamic.element(index, dynamic.dynamic)),
           )
-        None -> DigObject(path, dynamic.element(index, dynamic.dynamic))
       }
     }
   }
