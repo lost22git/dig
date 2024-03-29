@@ -6,11 +6,14 @@ import gleam/regex
 import gleam/int
 import gleam/iterator
 
+/// `DigDecoder`
+/// wrap `dynamic.Decoder` with a path
 pub type DigDecoder {
   DigObject(path: List(String), inner: Decoder(Dynamic))
   DigList(path: List(String), inner: Decoder(List(Dynamic)))
 }
 
+/// get path of `DigDecoder`
 pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
   case dig_decoder {
     DigObject(path, _) -> path
@@ -18,14 +21,18 @@ pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
   }
 }
 
+/// `DigError`
 pub type DigError {
   EmptyPath
   ParsePath(inner: PathSegParseError)
 }
 
+/// `DigResult`
+/// `Ok(DigDecoder)` or `Error(DigError)`
 pub type DigResult =
   Result(DigDecoder, DigError)
 
+/// dig `dynamic.Encoder` in path
 pub fn dig(path: List(String)) -> DigResult {
   case path {
     [] -> Error(EmptyPath)
@@ -45,10 +52,12 @@ pub fn dig(path: List(String)) -> DigResult {
   }
 }
 
+/// dig `dynamic.Decoder` in single path segment
 pub fn dig_path_seg(path_seg: String) -> DigResult {
   dig_path_seg_with_path([], path_seg)
 }
 
+/// compose two `DigDecoder`s
 pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
   case a, b {
     DigObject(_a_path, a_decoder), DigObject(b_path, b_decoder) ->
@@ -93,7 +102,7 @@ pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
   }
 }
 
-pub fn dig_path_seg_with_path(
+fn dig_path_seg_with_path(
   path: List(String),
   path_seg: String,
 ) -> Result(DigDecoder, DigError) {
@@ -105,6 +114,7 @@ pub fn dig_path_seg_with_path(
   let path = list.append(path, [path_seg])
 
   case parsed_path_seg {
+    // Object
     Object(key) -> DigObject(path, dynamic.field(key, dynamic.dynamic))
     // List
     List(Some(key), None) ->
@@ -145,26 +155,13 @@ pub fn dig_path_seg_with_path(
           ),
         ])
       })
-    // Tuple ? really need it?
-    Tuple(key_option, index) -> {
-      case key_option {
-        None -> DigObject(path, dynamic.element(index, dynamic.dynamic))
-        Some(key) ->
-          DigObject(
-            path,
-            dynamic.field(key, dynamic.element(index, dynamic.dynamic)),
-          )
-      }
-    }
   }
   |> Ok()
 }
 
-/// Object
 pub type PathSeg {
   Object(key: String)
   List(key: Option(String), index: Option(Int))
-  Tuple(key: Option(String), index: Int)
 }
 
 pub type PathSegParseError {
@@ -174,13 +171,13 @@ pub type PathSegParseError {
 pub type PathSegParseResult =
   Result(PathSeg, PathSegParseError)
 
+/// parse single path segment
 pub fn parse_path_seg(path_seg: String) -> PathSegParseResult {
   parse_object_path_seg(path_seg)
   |> result.lazy_or(fn() { parse_list_path_seg(path_seg) })
-  |> result.lazy_or(fn() { parse_tuple_path_seg(path_seg) })
 }
 
-pub fn parse_object_path_seg(path_seg: String) -> PathSegParseResult {
+fn parse_object_path_seg(path_seg: String) -> PathSegParseResult {
   let assert Ok(obj_regex) = regex.from_string("^\\w+$")
   case regex.scan(with: obj_regex, content: path_seg) {
     [] -> Error(InvalidPathSeg(path_seg))
@@ -188,7 +185,7 @@ pub fn parse_object_path_seg(path_seg: String) -> PathSegParseResult {
   }
 }
 
-pub fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
+fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
   let assert Ok(list_regex) = regex.from_string("^(\\w*)\\[(\\d*)\\]$")
   case regex.scan(with: list_regex, content: path_seg) {
     [] -> Error(InvalidPathSeg(path_seg))
@@ -212,35 +209,6 @@ pub fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
           Ok(List(key, Some(index)))
         }
         None -> Ok(List(key, None))
-      }
-    }
-  }
-}
-
-pub fn parse_tuple_path_seg(path_seg: String) -> PathSegParseResult {
-  let assert Ok(tuple_regex) = regex.from_string("^(\\w*)\\((\\d+)\\)$")
-  case regex.scan(with: tuple_regex, content: path_seg) {
-    [] -> Error(InvalidPathSeg(path_seg))
-    [first, ..] -> {
-      use key <- try(
-        first.submatches
-        |> list.first
-        |> replace_error(InvalidPathSeg(path_seg)),
-      )
-      use index_option <- try(
-        first.submatches
-        |> list.at(1)
-        |> replace_error(InvalidPathSeg(path_seg)),
-      )
-      case index_option {
-        Some(v) -> {
-          use index <- try(
-            int.parse(v)
-            |> replace_error(InvalidPathSeg(path_seg)),
-          )
-          Ok(Tuple(key, index))
-        }
-        None -> Error(InvalidPathSeg(path_seg))
       }
     }
   }

@@ -45,23 +45,6 @@ pub fn parse_path_seg_test() {
     index
     |> should.equal(None)
   }
-  // Tuple
-  {
-    let assert Ok(dig.Tuple(Some(key), index)) =
-      "abc(1)"
-      |> dig.parse_path_seg()
-    key
-    |> should.equal("abc")
-    index
-    |> should.equal(1)
-  }
-  {
-    let assert Ok(dig.Tuple(None, index)) =
-      "(1)"
-      |> dig.parse_path_seg()
-    index
-    |> should.equal(1)
-  }
 }
 
 pub fn dig_path_seg_test() {
