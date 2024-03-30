@@ -1,6 +1,6 @@
 # dig
 
-[![Package Version](https://img.shields.io/hexpm/v/glam?color=92DCE5)](https://hex.pm/packages/dig)
+[![Package Version](https://img.shields.io/hexpm/v/dig?color=92DCE5)](https://hex.pm/packages/dig)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3?color=FCC0D2)](https://hexdocs.pm/dig/)
 
 ✨ Parse path expression as [dynamic.Decoder](https://hexdocs.pm/gleam_stdlib/gleam/dynamic.html#Decoder)
