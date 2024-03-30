@@ -7,12 +7,14 @@ import gleam/int
 import gleam/iterator
 
 /// wrap `dynamic.Decoder` with a path
+///
 pub type DigDecoder {
   DigObject(path: List(String), inner: Decoder(Dynamic))
   DigList(path: List(String), inner: Decoder(List(Dynamic)))
 }
 
 /// get path of `DigDecoder`
+///
 pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
   case dig_decoder {
     DigObject(path, _) -> path
@@ -26,13 +28,16 @@ pub type DigError {
 }
 
 /// `Ok(DigDecoder)` or `Error(DigError)`
+///
 pub type DigResult =
   Result(DigDecoder, DigError)
 
 /// dig `dynamic.Encoder` in path
+///
 pub fn dig(path: List(String)) -> DigResult {
   case path {
     [] -> Error(EmptyPath)
+
     [first, ..rest] -> {
       use first_dig_decoder <- try(dig_path_seg_with_path([], first))
       rest
@@ -50,6 +55,7 @@ pub fn dig(path: List(String)) -> DigResult {
 }
 
 /// dig `dynamic.Decoder` in single path segment
+///
 pub fn dig_path_seg(path_seg: String) -> DigResult {
   dig_path_seg_with_path([], path_seg)
 }
@@ -113,10 +119,15 @@ fn dig_path_seg_with_path(
   case parsed_path_seg {
     // Object
     Object(key) -> DigObject(path, dynamic.field(key, dynamic.dynamic))
+
     // List
     List(Some(key), None) ->
       DigList(path, dynamic.field(key, dynamic.list(dynamic.dynamic)))
+
+    // List
     List(None, None) -> DigList(path, dynamic.list(dynamic.dynamic))
+
+    // List
     List(Some(key), Some(index)) ->
       DigObject(
         path,
@@ -136,6 +147,8 @@ fn dig_path_seg_with_path(
           ])
         }),
       )
+
+    // List
     List(None, Some(index)) ->
       DigObject(path, fn(d) {
         use shallow_list <- try(
@@ -156,6 +169,8 @@ fn dig_path_seg_with_path(
   |> Ok()
 }
 
+//  ------ PathSeg -------------------------
+
 pub type PathSeg {
   Object(key: String)
   List(key: Option(String), index: Option(Int))
@@ -169,6 +184,7 @@ pub type PathSegParseResult =
   Result(PathSeg, PathSegParseError)
 
 /// parse single path segment
+///
 pub fn parse_path_seg(path_seg: String) -> PathSegParseResult {
   parse_object_path_seg(path_seg)
   |> result.lazy_or(fn() { parse_list_path_seg(path_seg) })
@@ -176,6 +192,7 @@ pub fn parse_path_seg(path_seg: String) -> PathSegParseResult {
 
 fn parse_object_path_seg(path_seg: String) -> PathSegParseResult {
   let assert Ok(obj_regex) = regex.from_string("^\\w+$")
+
   case regex.scan(with: obj_regex, content: path_seg) {
     [] -> Error(InvalidPathSeg(path_seg))
     [first, ..] -> Ok(Object(first.content))
@@ -186,6 +203,7 @@ fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
   let assert Ok(list_regex) = regex.from_string("^(\\w*)\\[(\\d*)\\]$")
   case regex.scan(with: list_regex, content: path_seg) {
     [] -> Error(InvalidPathSeg(path_seg))
+
     [first, ..] -> {
       use key <- try(
         first.submatches
@@ -197,7 +215,9 @@ fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
         |> list.at(1)
         |> replace_error(InvalidPathSeg(path_seg)),
       )
+
       case index_option {
+        None -> Ok(List(key, None))
         Some(v) -> {
           use index <- try(
             int.parse(v)
@@ -205,7 +225,6 @@ fn parse_list_path_seg(path_seg: String) -> PathSegParseResult {
           )
           Ok(List(key, Some(index)))
         }
-        None -> Ok(List(key, None))
       }
     }
   }
