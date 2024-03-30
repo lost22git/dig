@@ -6,7 +6,6 @@ import gleam/regex
 import gleam/int
 import gleam/iterator
 
-/// `DigDecoder`
 /// wrap `dynamic.Decoder` with a path
 pub type DigDecoder {
   DigObject(path: List(String), inner: Decoder(Dynamic))
@@ -21,13 +20,11 @@ pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
   }
 }
 
-/// `DigError`
 pub type DigError {
   EmptyPath
   ParsePath(inner: PathSegParseError)
 }
 
-/// `DigResult`
 /// `Ok(DigDecoder)` or `Error(DigError)`
 pub type DigResult =
   Result(DigDecoder, DigError)
