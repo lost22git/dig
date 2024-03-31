@@ -1,5 +1,5 @@
 name = "dig"
-version = "1.0.0"
+version = "1.0.1"
 
 description = "parse path expr as `dynamic.Decoder`"
 licences = ["MIT"]

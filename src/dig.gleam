@@ -39,16 +39,10 @@ pub fn dig(path: List(String)) -> DigResult {
     [] -> Error(EmptyPath)
 
     [first, ..rest] -> {
-      use first_dig_decoder <- try(dig_path_seg_with_path([], first))
-      rest
-      |> list.try_fold(first_dig_decoder, fn(acc_dig_decoder, it) {
-        use it_dig_decoder <- try(dig_path_seg_with_path(
-          get_path(acc_dig_decoder),
-          it,
-        ))
-        acc_dig_decoder
-        |> compose(it_dig_decoder)
-        |> Ok()
+      use first_dig_decoder <- try(dig_path_seg(first))
+      list.try_fold(rest, first_dig_decoder, fn(acc_dig_decoder, it) {
+        use it_dig_decoder <- try(dig_path_seg(it))
+        Ok(compose(acc_dig_decoder, it_dig_decoder))
       })
     }
   }
@@ -57,64 +51,12 @@ pub fn dig(path: List(String)) -> DigResult {
 /// dig `dynamic.Decoder` in single path segment
 ///
 pub fn dig_path_seg(path_seg: String) -> DigResult {
-  dig_path_seg_with_path([], path_seg)
-}
-
-/// compose two `DigDecoder`s
-pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
-  case a, b {
-    DigObject(_a_path, a_decoder), DigObject(b_path, b_decoder) ->
-      DigObject(b_path, fn(d) {
-        use dd <- try(a_decoder(d))
-        b_decoder(dd)
-        |> map_errors(fn(e) { DecodeError(..e, path: b_path) })
-      })
-
-    DigObject(_a_path, a_decoder), DigList(b_path, b_decoder) ->
-      DigList(b_path, fn(d) {
-        use dd <- try(a_decoder(d))
-        b_decoder(dd)
-        |> map_errors(fn(e) { DecodeError(..e, path: b_path) })
-      })
-
-    DigList(_a_path, a_decoder), DigObject(b_path, b_decoder) ->
-      DigList(b_path, fn(d) {
-        use dd <- try(a_decoder(d))
-        iterator.from_list(dd)
-        |> iterator.map(b_decoder)
-        |> iterator.map(map_errors(_, fn(e) { DecodeError(..e, path: b_path) }))
-        |> iterator.to_list()
-        |> result.all()
-      })
-
-    DigList(_a_path, a_decoder), DigList(b_path, b_decoder) ->
-      DigList(b_path, fn(d) {
-        use dd <- try(a_decoder(d))
-        {
-          use ddd <- list.flat_map(dd)
-          // Result(List(D), E) -> List(Result(D,E))
-          case b_decoder(ddd) {
-            Ok(v) -> list.map(v, Ok)
-            Error(e) -> [
-              map_errors(Error(e), fn(e) { DecodeError(..e, path: b_path) }),
-            ]
-          }
-        }
-        |> result.all()
-      })
-  }
-}
-
-fn dig_path_seg_with_path(
-  path: List(String),
-  path_seg: String,
-) -> Result(DigDecoder, DigError) {
   use parsed_path_seg <- try(
     parse_path_seg(path_seg)
     |> result.map_error(fn(e) { ParsePath(e) }),
   )
 
-  let path = list.append(path, [path_seg])
+  let path = [path_seg]
 
   case parsed_path_seg {
     // Object
@@ -167,6 +109,60 @@ fn dig_path_seg_with_path(
       })
   }
   |> Ok()
+}
+
+/// compose two `DigDecoder`s
+///
+pub fn compose(a: DigDecoder, b: DigDecoder) -> DigDecoder {
+  case a, b {
+    DigObject(a_path, a_decoder), DigObject(b_path, b_decoder) -> {
+      let path = list.append(a_path, b_path)
+      DigObject(path, fn(d) {
+        use dd <- try(a_decoder(d))
+        b_decoder(dd)
+        |> map_errors(fn(e) { DecodeError(..e, path: path) })
+      })
+    }
+
+    DigObject(a_path, a_decoder), DigList(b_path, b_decoder) -> {
+      let path = list.append(a_path, b_path)
+      DigList(path, fn(d) {
+        use dd <- try(a_decoder(d))
+        b_decoder(dd)
+        |> map_errors(fn(e) { DecodeError(..e, path: path) })
+      })
+    }
+
+    DigList(a_path, a_decoder), DigObject(b_path, b_decoder) -> {
+      let path = list.append(a_path, b_path)
+      DigList(path, fn(d) {
+        use dd <- try(a_decoder(d))
+        iterator.from_list(dd)
+        |> iterator.map(b_decoder)
+        |> iterator.map(map_errors(_, fn(e) { DecodeError(..e, path: path) }))
+        |> iterator.to_list()
+        |> result.all()
+      })
+    }
+
+    DigList(a_path, a_decoder), DigList(b_path, b_decoder) -> {
+      let path = list.append(a_path, b_path)
+      DigList(path, fn(d) {
+        use dd <- try(a_decoder(d))
+        {
+          use ddd <- list.flat_map(dd)
+          // Result(List(D), E) -> List(Result(D,E))
+          case b_decoder(ddd) {
+            Ok(v) -> list.map(v, Ok)
+            Error(e) -> [
+              map_errors(Error(e), fn(e) { DecodeError(..e, path: path) }),
+            ]
+          }
+        }
+        |> result.all()
+      })
+    }
+  }
 }
 
 //  ------ PathSeg -------------------------
