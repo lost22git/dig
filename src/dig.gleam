@@ -13,15 +13,6 @@ pub type DigDecoder {
   DigList(path: List(String), inner: Decoder(List(Dynamic)))
 }
 
-/// get path of `DigDecoder`
-///
-pub fn get_path(dig_decoder: DigDecoder) -> List(String) {
-  case dig_decoder {
-    DigObject(path, _) -> path
-    DigList(path, _) -> path
-  }
-}
-
 pub type DigError {
   EmptyPath
   ParsePath(inner: PathSegParseError)
