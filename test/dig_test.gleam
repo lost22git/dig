@@ -1,12 +1,12 @@
+import dig
+import gleam/dynamic
+import gleam/io
+import gleam/json
+import gleam/list
+import gleam/option.{None, Some}
+import gleam/string
 import gleeunit
 import gleeunit/should
-import dig
-import gleam/option.{None, Some}
-import gleam/json
-import gleam/dynamic
-import gleam/string
-import gleam/list
-import gleam/io
 
 pub fn main() {
   gleeunit.main()

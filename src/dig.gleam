@@ -1,10 +1,10 @@
 import gleam/dynamic.{type DecodeErrors, type Decoder, type Dynamic, DecodeError}
-import gleam/list
-import gleam/result.{replace_error, try}
-import gleam/option.{type Option, None, Some}
-import gleam/regex
 import gleam/int
 import gleam/iterator
+import gleam/list
+import gleam/option.{type Option, None, Some}
+import gleam/regex
+import gleam/result.{replace_error, try}
 
 /// wrap `dynamic.Decoder` with a path
 ///
